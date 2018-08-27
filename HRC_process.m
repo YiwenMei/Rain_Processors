@@ -74,11 +74,12 @@ xll=(cl-1)*rs_lon; % longitude of lower left corner
 yll=60-rb*rs_lat; % latitude of lower left corner
 
 % unzip and read the input
-system(sprintf('7z e "%s" -o"%s" * -r',infname,workpth));
-% gunzip(infname,workpth); % unzip
+% system(sprintf('7z e "%s" -o"%s" * -r',infname,workpth));
+system(sprintf('bunzip2 "%s"',infname)); % unzip
 
 [~,nm,~]=fileparts(infname);
 uz_fn=[workpth nm];
+movefile(infname(1:end-4),uz_fn); % This needs to work with bunzip2
 fid=fopen(uz_fn);
 p=fread(fid,'float32','l');
 fclose(fid);

@@ -117,14 +117,14 @@ if ~isempty(out_pj)
     pr4=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
   end
 
-  delete(name);
-
   par=[pr1 pr2 pr3 pr4];
   inv=['"' name '" '];
-  ouv=['"' outpth '\CCSp' ds '.tif"'];
+  ouv=['"' outpth 'CCSp' ds '.tif"'];
   system([fun par inv ouv]); % project
 
-  p1=double(imread([outpth '\CCSp' ds '.tif']))/scf;
+  delete(name);
+
+  p1=double(imread([outpth 'CCSp' ds '.tif']))/scf;
   p1(p1==ndv/scf)=NaN;
 
 else
@@ -133,7 +133,7 @@ else
     y=str2double(['20' nm(8:9)]);
     jd=str2double(nm(10:12));
     ds=[datestr(doy2date(jd,y),'yyyymmdd') nm(13:14)];
-    name=[outpth '\CCS' ds '.asc'];
+    name=[outpth 'CCS' ds '.asc'];
 
     fid=fopen(name,'w');
     fprintf(fid,'%s\n%s\n%s\n%s\n%s\n%s\n',['ncols ' num2str(nc)],['nrows '...
