@@ -1,4 +1,4 @@
-# SateRain_Processors
+# Rain_Processors
 This repository contains Matlab codes I made to process different satellite precipitation products. Currently, this includes:
  1)Real-time TMPA-3B42 (TRT_Process.m);
  2)Gauge-adjusted TMPA-3B42 (TV7_Process.m);
