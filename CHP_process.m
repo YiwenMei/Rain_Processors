@@ -41,10 +41,10 @@
 %   to reproject the data into other coordinate system.
 % 2)If reprojection is not required but record outputted as .asc is wanted, outpth
 %   is required to set.
-% 3)The no-data value of HRC/CHRC are preseved in the .asc and .tif record.
+% 3)The no-data value of CHIRP/CHIRPS are preseved in the .asc and .tif record.
 
 function CHP_process(infname,cty,xl,xr,yb,yt,outpth,out_pj,rs)
-% Lat/lon grids and other info of CMORPH
+% Lat/lon grids and other info of CHIRP/CHIRPS
 Lat=double(ncread(infname,'latitude'));
 Lon=double(ncread(infname,'longitude'));
 rs_lon=360/length(Lon);
