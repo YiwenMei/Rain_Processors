@@ -98,9 +98,9 @@ if ~isempty(out_pj)
 % Creat the asc files
   ds=nm(length(nm)-9:length(nm)); % pay careful attention to this.
   if cty==0
-    name=[outpth 'HRC' ds '.asc'];
+    name=[workpth 'HRC' ds '.asc'];
   else
-    name=[outpth 'CHRC' ds '.asc'];
+    name=[workpth 'CHRC' ds '.asc'];
   end
 
   fid=fopen(name,'w');
@@ -124,21 +124,15 @@ if ~isempty(out_pj)
   end
 
   par=[pr1 pr2 pr3 pr4];
-  inv=['"' name '" '];
   if cty==0
-    ouv=['"' outpth 'HRCp' ds '.tif"'];
+    ouv=[outpth 'HRCp' ds '.tif'];
   else
-    ouv=['"' outpth 'CHRCp' ds '.tif"'];
+    ouv=[outpth 'CHRCp' ds '.tif'];
   end
-  system([fun par inv ouv]); % project
-
+  system([fun par '"' name '" "' ouv '"']); % project
   delete(name);
 
-  if cty==0
-    p1=double(imread([outpth 'HRCp' ds '.tif']));
-  else
-    p1=double(imread([outpth 'CHRCp' ds '.tif']));
-  end
+  p1=double(imread(ouv));
   p1(p1==ndv)=NaN;
 
 else
@@ -146,9 +140,9 @@ else
 % Creat the asc files
     ds=nm(length(nm)-9:length(nm)); % pay careful attention to this.
     if cty==0
-      name=[outpth 'HRC' ds '.asc'];
+      name=[workpth 'HRC' ds '.asc'];
     else
-      name=[outpth 'CHRC' ds '.asc'];
+      name=[workpth 'CHRC' ds '.asc'];
     end
 
     fid=fopen(name,'w');
