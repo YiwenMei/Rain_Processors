@@ -7,4 +7,5 @@ This repository contains Matlab codes I made to process different precipitation 
  5)PERSIANN-CCS (CCS_Process.m);
  6)GSMaP-MVK and GSMaP-gauge (GSM_Process.m);
  7)CHIRP and CHIRPS (CHP_Process.m);
- 8)APHRODITE Monsoon Asia (APH_Process.m)
+ 8)APHRODITE Monsoon Asia (APH_Process.m);
+ 9)GPCU (GPCU_Process.m)
