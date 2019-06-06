@@ -56,8 +56,8 @@ uz_fn=[workpth nm];
 ys=nm(23:26); % pay careful attention to this.
 
 % Lat/lon grids and other info of APHRODITE
-Lat=double(ncread(uz_fn,'latitude'));
-Lon=double(ncread(uz_fn,'longitude'));
+Lat=double(ncread(uz_fn,'lat'));
+Lon=double(ncread(uz_fn,'lon'));
 rso=.25;
 Lat=flipud(unique([Lat-rso/2,Lat+rso/2]));
 Lon=unique([Lon-rso/2,Lon+rso/2]);
@@ -69,7 +69,7 @@ elseif fty==0
 end
 T=double(ncread(uz_fn,'time'));
 ndv=ncinfo(uz_fn,fn);
-ndv=double(ndv.Attributes(4).Value); % no-data value
+ndv=double(ndv.Attributes(1).Value); % no-data value
 
 % Index of interested domain
 if xl(1)<0 % Convert longitude to the range of [0 360];
@@ -90,7 +90,7 @@ xll=min(Lon)+(cl-1)*rso; % longitude of lower left corner
 yll=max(Lat)-rb*rso; % latitude of lower left corner
 
 % Read the record
-for d=1:length(T)
+parfor d=1:length(T)
   p=double(rot90(ncread(uz_fn,fn,[1,1,d],[length(Lon)-1 length(Lat)-1 1])));
   p=p(rt:rb,cl:cr); % crop
 
