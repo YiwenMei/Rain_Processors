@@ -9,3 +9,5 @@ This repository contains Matlab codes I made to process different precipitation 
  7)CHIRP and CHIRPS (CHP_Process.m);
  8)APHRODITE Monsoon Asia (APH_Process.m);
  9)GPCU (GPCU_Process.m)
+
+A demo for the HRC_Process ultilities is provided (demo_HRC_process.m). Demos for the others will be provided in the future based on my availability.
