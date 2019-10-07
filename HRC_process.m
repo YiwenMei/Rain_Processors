@@ -1,60 +1,107 @@
 % Yiwen Mei (ymei2@gmu.edu)
 % CEIE, George Mason University
-% Last update: 3/10/2018
+% Last update: 10/7/2019
 
 %% Functionality
-% This function is used to process the original or corrected high resolution CMORPH
-% satellite precipitation product (Joyce et al. 2004). It includes several functionalities:
-%  1)unzip the CMORPH record (e.g., CMORPH_V1.0_RAW_8km-30min_2008070100.bz2);
-%  2)read and crop the record based on an given lat/lon box;
-%  3)output the cropped record as .asc file (optional);
-%  4)project the record in .asc to another projection and output the record as
-%    GTiff (optional).
+% This function is used to process the near-real-time or post-real-time high
+%  resolution CMORPH satellite precipitation product (Joyce et al. 2004). Its
+%  main functionalities are
+%    1)unzip the CMORPH record (e.g. CMORPH_V1.0_RAW_8km-30min_2008070100.bz2);
+%    2)read the unzipped record; and
+%    3)crop the record based on an given lat/lon box.
+%  Its optional functionalities are
+%   4a)resample the cropped record;
+%   4b)project the cropped record to another coordinate system;
+%   5b)crop the projected record;
+%    6)output the processed record as geotiff.
 
 %% Input
-% infname: full name with path of the input high resolution CMORPH record (e.g.,
-%          G:\CMORPH\HRC\200807\CMORPH_V1.0_RAW_8km-30min_2008070100.bz2;
-%          G:\CMORPH\CHRC\200807\CMORPH_V1.0_ADJ_8km-30min_2008070100.bz2;);
-%   cty  : type of CMORPH record (0 for HRC, 1 for CHRC);
-% workpth: path to store the unzipped record;
-%  xl/xr : left/right longitude of the boundary (xl/xr can have either 1 or 2 number(s)
-%          where the first one represents the longitude and must be in the range of
-%          [-180 180]; the second one is boundary in the projected coordinate unit);
-%  yb/yt : bottom/top latitude of the boundary (yb/yt can have either 1 or 2 number(s)
-%          where the first one represents the latitude and must be in the range of
-%          [60 -60]; the second one is boundary in the projected coordinate unit);
-% outpth : path to store the .asc and, if have, the .tif files (set it to "[]" if
-%          no need to output record in .asc format);
-% out_pj : output coordinate system (e.g., EPSG:102009; set it to "[]" if no
-%          reprojection is required);
-%   rs   : x and y resolution of the projected image (set it to "[]" if no
-%          reprojection is required).
+% fname: full name with path of the input high resolution CMORPH record (e.g.,
+%        G:\CMORPH\HRC\200807\CMORPH_V1.0_RAW_8km-30min_2008070100.bz2;
+%        G:\CMORPH\CHRC\200807\CMORPH_V1.0_ADJ_8km-30min_2008070100.bz2;);
+%  cty : type of CMORPH record as character (HRC for the near-real-time version
+%        and CHRC for the post-real-time one);
+% wkpth: working directory of the code;
+%  xl  : longitude (in the range of [-180 180]) of the west boundary (xl can
+%        have an optional second element to represent the west boundary coordinate
+%        in the unit of the output coordinate system);
+%  xr  : similar to xl but for the east boundary;
+%  yb  : latitude (in the range of [-60 60]) of the south boundary (yb can have
+%        an optional second element to represent the south boundary coordinate
+%        in the unit of the output coordinate system);
+%  yt  : similar to yb but for the north boundary;
+
+% opth: path to store the outputed .tif files;
+% ors : output coordinate system (e.g. EPSG:102009);
+%  rs : x and y resolution of the outputted precipitation.
 
 %% Output
-%       p / p1      : cropped precipitation map in original/new projection (the
-%                     orientation follows the human reading convention);
-%  HRCyyyymmddhh.asc: precipitaiton map in original projection and resolution
-%                     outputted to outpth as .asc file;
-% HRCpyyyymmddhh.tif: precipitaiton map in new projection, resolution and extend
-%                     outputted to outpth as .tif file;
+% p: processed precipitation (the orientation follows the human reading convention);
+
+% HRCyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
+%  (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
-% 1)The input files are unzipped from the original monthly ".tar" file.
-% 2)Please make sure to have GDAL installed and the out_path set if you want to
-%   reproject the data into other coordinate system.
-% 3)If reprojection is not required (i.e., out_pj and rs are "[]") but record
-%   outputted as .asc is wanted, out_path is required to set.
-% 4)The no-data value of HRC/CHRC are preseved in the .asc and .tif record.
+% 1)The input files are unzipped from the original monthly ".tar" file;
+% 2)If any optional functionality is required, please make sure to have GDAL
+%   installed;
+% 3)The no-data value of HRC/CHRC are preseved in the .tif record; and
+% 4)Require matV2tif.m.
 
-function [p,p1]=HRC_process(infname,cty,workpth,xl,xr,yb,yt,outpth,out_pj,rs)
-% Lat/lon grids and other info of CMORPH
+function p=HRC_process(fname,cty,wkpth,xl,xr,yb,yt,varargin)
+%% Check the inputs
+narginchk(7,10);
+ips=inputParser;
+ips.FunctionName=mfilename;
+fprintf('%s received 7 required and %d optional inputs\n',mfilename,length(varargin));
+
+addRequired(ips,'fname',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'fname',1));
+expInS={'HRC','CHRC'};
+msg=cell2mat(cellfun(@(x) [x ', '],expInS,'UniformOutput',false));
+msg=sprintf('Expected InS to be one of the following %s\n',msg);
+addRequired(ips,'cty',@(x) assert(any(strcmp(x,expInS)),msg));
+addRequired(ips,'wkpth',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'wkpth',3));
+msg=sprintf('Size of xl, xr, yb, yt must be 1 or 2');
+addRequired(ips,'xl',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'xr',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
+
+addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth',8));
+addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors',9));
+addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs',10));
+
+parse(ips,fname,cty,wkpth,xl,xr,yb,yt,varargin{:});
+opth=ips.Results.opth;
+ors=ips.Results.ors;
+rs=ips.Results.rs;
+clear ips msg varargin
+
+%% Lat/lon grids and other info of CMORPH
 rs_lon=360/4948;
 rs_lat=120/1649;
 Lon=0:rs_lon:360;
 Lat=60:-rs_lat:-60;
 
-ndv=-999; % no-data value
+ndv=-999; % no-data value of CMORPH
 
+%% unzip and read the file
+[inp,nm,~]=fileparts(fname);
+uz_fn=fullfile(wkpth,nm);
+system(sprintf('bunzip2 "%s"',fname)); % system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
+
+movefile(fullfile(inp,nm),uz_fn); % This needs to work with bunzip2
+fid=fopen(uz_fn);
+p=fread(fid,'float32','l');
+fclose(fid);
+
+p=reshape(p,4948,1649,length(p)/4948/1649);
+p(p==ndv)=NaN;
+p=nanmean(p,3);
+p=rot90(p);
+p(isnan(p))=ndv;
+
+%% Extracting the file
 % Index of interested domain
 if xl(1)<0 % Convert longitude to the range of [0 360];
   xl(1)=xl(1)+360;
@@ -68,90 +115,40 @@ cr=find(xr(1)-Lon<=0,1,'first')-1; % right column
 rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
 
-nr=length(rt:rb); % number of row
-nc=length(cl:cr); % number of column
 xll=(cl-1)*rs_lon; % longitude of lower left corner
 yll=60-rb*rs_lat; % latitude of lower left corner
 
-% unzip and read the input
-% system(sprintf('7z e "%s" -o"%s" * -r',infname,workpth));
-system(sprintf('bunzip2 "%s"',infname)); % unzip
-
-[~,nm,~]=fileparts(infname);
-uz_fn=[workpth nm];
-movefile(infname(1:end-4),uz_fn); % This needs to work with bunzip2
-fid=fopen(uz_fn);
-p=fread(fid,'float32','l');
-fclose(fid);
-
-p=reshape(p,4948,1649,length(p)/4948/1649);
-p(p==ndv)=NaN;
-p=nanmean(p,3);
-p=rot90(p);
-p(isnan(p))=ndv;
-
-p=p(rt:rb,cl:cr); % crop
+p=p(rt:rb,cl:cr); % extract
 delete(uz_fn);
 
-p1=[];
-if ~isempty(out_pj)
-% Creat the asc files
-  ds=nm(length(nm)-9:length(nm)); % pay careful attention to this.
-  if cty==0
-    name=[workpth 'HRC' ds '.asc'];
-  else
-    name=[workpth 'CHRC' ds '.asc'];
+%% Resample/project/crop the file
+pr2=[];
+
+ds=cell2mat(regexp(nm,'_(\d{10})','tokens','once'));
+if ~isempty(opth)
+  if system('gdalinfo --version')~=0
+    error('GDAL is not detected. Please install GDAL to evoke the optional functionalities.\n');
   end
 
-  fid=fopen(name,'w');
-  fprintf(fid,'%s\n%s\n%s\n%s\n%s\n%s\n',['ncols ' num2str(nc)],['nrows '...
-    num2str(nr)],['xllcorner ' num2str(xll,8)],['yllcorner ' num2str(yll,8)],...
-    ['cellsize ' num2str(rs_lat)],['NODATA_value ' num2str(ndv)]);
-  fclose(fid);
-  dlmwrite(name,p,'delimiter',' ','-append'); % output .asc
+  tfn=fullfile(wkpth,sprintf('%s%s.tif',cty,ds));
+  matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-% Project to a new coordinate
   fun='gdalwarp -overwrite -of GTiff -r bilinear '; % GDAL function
-  pr1='-s_srs wgs84 '; % Projection of original record
-  pr2=['-t_srs ' out_pj ' '];
-  pr3=[];
-  if ~isempty(rs)
-    pr3=sprintf('-tr %i %i ',rs(1),rs(2));
+  pr1=sprintf('-t_srs %s ',ors); % Project
+  if ~isempty(rs) % Resample
+    pr2=sprintf('-tr %i %i ',rs(1),rs(2));
   end
-  pr4=[];
+  pr3=[]; % Crop projected image
   if length(xl)==2
-    pr4=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
+    pr3=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
   end
 
-  par=[pr1 pr2 pr3 pr4];
-  if cty==0
-    ouv=[outpth 'HRCp' ds '.tif'];
-  else
-    ouv=[outpth 'CHRCp' ds '.tif'];
-  end
-  system([fun par '"' name '" "' ouv '"']); % project
-  delete(name);
+  par=[pr1 pr2 pr3];
+  tfn1=fullfile(opth,sprintf('%s%s.tif',cty,ds));
+  system([fun par tfn ' ' tfn1]); % resample/project/crop
+  delete(tfn);
 
-  p1=double(imread(ouv));
-  p1(p1==ndv)=NaN;
-
-else
-  if ~isempty(outpth)
-% Creat the asc files
-    ds=nm(length(nm)-9:length(nm)); % pay careful attention to this.
-    if cty==0
-      name=[workpth 'HRC' ds '.asc'];
-    else
-      name=[workpth 'CHRC' ds '.asc'];
-    end
-
-    fid=fopen(name,'w');
-    fprintf(fid,'%s\n%s\n%s\n%s\n%s\n%s\n',['ncols ' num2str(nc)],['nrows '...
-      num2str(nr)],['xllcorner ' num2str(xll,8)],['yllcorner ' num2str(yll,8)],...
-      ['cellsize ' num2str(rs_lat)],['NODATA_value ' num2str(ndv)]);
-    fclose(fid);
-    dlmwrite(name,p,'delimiter',' ','-append');
-  end
+  p=double(imread(tfn1));
 end
 p(p==ndv)=NaN;
 end
