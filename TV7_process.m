@@ -3,128 +3,129 @@
 % Last update: 3/2/2018
 
 %% Functionality
-% This function is used to process the TMPA 3B42-V7 satellite precipitation
-% product (Huffuman et al. 2007). It includes several functionalities:
-%  1)unzip the TMPA 3B42-V7 record (3B42.2000030100.7R2.bin.gz);
-%  2)read and crop the record based on an given lat/lon box;
-%  3)output the cropped record as .asc file (optional);
-%  4)project the record in .asc to another projection and output the record
-%    in GTiff (optional).
+% This function is used to process the TMPA 3B42-V7 satellite precipitation product
+%  (Huffuman et al. 2007). Its main functionalities are
+%   1)unzip the 3B42-V7 record (3B42.2000030100.7R2.bin.gz);
+%   2)read the unzipped record; and
+%   3)extract the record based on an given lat/lon box.
+%  Its optional functionalities are
+%   4)resample the extracted record;
+%   5)project the extracted record to another coordinate system; and
+%   6)crop the projected record to a retangular box.
+%  If any of the optional functionality is evoked, the processed record will
+%  be outputted as geotif in the output directory.
 
 %% Input
-% infname: full name with path of the input TMPA 3B42-V7 file (e.g.,
-%          G:\TMPA\3B42V7\2000\3B42.20000301.00.7A.HDF.Z);
-% workpth: path to store the unzipped record;
-%  xl/xr : left/right longitude of the boundary (xl/xr can have either 1 or 2 number(s)
-%          where the first one represents the longitude and must be in the range of
-%          [-180 180]; the second one is boundary in the projected coordinate unit);
-%  yb/yt : bottom/top latitude of the boundary (yb/yt can have either 1 or 2 number(s)
-%          where the first one represents the latitude and must be in the range of
-%          [50 -50]; the second one is boundary in the projected coordinate unit);
-% outpth : path to store the .asc and, if have, the .tif files (set it to "[]" if
-%          no need to output record in .asc format);
-% out_pj : output coordinate system (e.g., EPSG:102009; set it to "[]" if no
-%          reprojection is required);
-%   rs   : x and y resolution of the projected image (set it to "[]" if no
-%          reprojection is required).
+% fname: full name of the input TMPA 3B42-V7 file (e.g.
+%         G:\TMPA\3B42V7\2000\3B42.20000301.00.7A.HDF.Z);
+% wkpth: working directory of the code;
+%  xl  : longitude (in the range of [-180 180]) of the west boundary (xl can
+%        have an optional second element to represent the west boundary coordinate
+%        in the unit of the output coordinate system);
+%  xr  : similar to xl but for the east boundary;
+%  yb  : latitude (in the range of [-50 50]) of the south boundary (yb can have
+%        an optional second element to represent the south boundary coordinate
+%        in the unit of the output coordinate system);
+%  yt  : similar to yb but for the north boundary;
+
+% opth: output directory to store the outputed .tif files;
+% ors : output coordinate system (e.g. EPSG:102009);
+%  rs : x and y resolution of the outputted precipitation.
 
 %% Output
-%         p / p1       : cropped precipitation map in original/new projection (the
-%                        orientation follows the human reading convention);
-%  3B42V7yyyymmddhh.asc: precipitaiton map in original projection and resolution
-%                        outputted to outpth as .asc file;
-% 3B42V7pyyyymmddhh.tif: precipitaiton map in new projection, resolution and extend
-%                        outputted to outpth as .tif file;
+% p: processed precipitation (the orientation follows the human reading convention);
+
+% 3B42gcyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
+%  (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
-% 1)Please make sure to have GDAL installed and the out_path set if you want
-%   reproject the data into other coordinate system.
-% 2)If reprojection is not required (i.e., out_pj and rs are "[]") but record
-%   outputted as .asc is wanted, out_path is required to set.
-% 3)The no-data value of TMPA 3B42V7 are changed (from -9.9999...e3) to -9999 in
-%   the .asc and .tif record.
+% 1)If any optional functionality is required, please make sure to have GDAL
+%   installed;
+% 2)No-data value of TMPA 3B42V7 are changed (from -9.9999...e3) to -999 in the
+%   outputted .tif file;
+% 4)Require matV2tif.m.
 
-function [p,p1]=TV7_process(infname,workpth,xl,xr,yb,yt,outpth,out_pj,rs)
-% Lat/lon grids and other info of TMPA 3B42V7
-res_lon=360/1440;
-res_lat=100/400;
-Lon=-180:res_lon:180;
-Lat=50:-res_lat:-50;
+function p=TV7_process(fname,wkpth,xl,xr,yb,yt,varargin)
+%% Check the inputs
+narginchk(6,9);
+ips=inputParser;
+ips.FunctionName=mfilename;
 
-ndv=-9999; % no-data value
+addRequired(ips,'fname',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'fname'));
+addRequired(ips,'wkpth',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'wkpth'));
+msg=sprintf('Size of xl, xr, yb, yt must be 1 or 2');
+addRequired(ips,'xl',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'xr',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
+addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
-% Index of interested domain
+addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
+addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
+addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
+
+parse(ips,fname,wkpth,xl,xr,yb,yt,varargin{:});
+opth=ips.Results.opth;
+ors=ips.Results.ors;
+rs=ips.Results.rs;
+clear ips msg varargin
+
+%% Lat/lon grids and other info of TMPA 3B42V7
+rs_lon=360/1440;
+rs_lat=100/400;
+Lon=-180:rs_lon:180;
+Lat=50:-rs_lat:-50;
+
+ndv=-999; % no-data value
+
+%% unzip and read the input
+[~,nm,~]=fileparts(fname);
+ufn=fullfile(wkpth,nm); % system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
+system(sprintf('gunzip -c %s > %s',fname,ufn));
+% delete(fname);
+
+p=double(hdfread(ufn,'precipitation'));
+p=rot90(p); % Original upper-left corner is (S,W). Rotate 90 degree counter
+p(p<0)=ndv; %  clock-wise to (W,N).
+delete(ufn);
+
+%% Extracting the file
 cl=find(xl(1)-Lon>=0,1,'last'); % left column
 cr=find(xr(1)-Lon<=0,1,'first')-1; % right column
 rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
+p=p(rt:rb,cl:cr); % extract
 
-nr=length(rt:rb); % number of row
-nc=length(cl:cr); % number of column
-xll=-180+(cl-1)*res_lon; % longitude of lower left corner
-yll=50-rb*res_lat; % latitude of lower left corner
+%% Resample/project/crop the file
+pr2=[];
 
-% unzip and read the input
-system(sprintf('7z e "%s" -o"%s" * -r',infname,workpth));
-% gunzip(infname,workpth); % unzip
+xll=-180+(cl-1)*rs_lon; % longitude of lower left corner
+yll=50-rb*rs_lat; % latitude of lower left corner
 
-[~,nm,~]=fileparts(infname);
-uz_fn=[workpth nm];
-p=hdfread(uz_fn,'precipitation');
-p=rot90(p); % Original upper-left corner is (S,W). Rotate 90 degree counter
-p(p<0)=ndv; %  clock-wise to (W,N).
-p=p(rt:rb,cl:cr); % crop
-delete(uz_fn);
+ds=cell2mat(regexp(nm,'.(\d{8}).(\d{2}).','tokens','once'));
+if ~isempty(opth)
+  if system('gdalinfo --version')~=0
+    error('GDAL is not detected. Please install GDAL to evoke the optional functionalities.\n');
+  end
 
-p1=[];
-if ~isempty(out_pj)
-% Creat the asc files
-  ds=nm([6:13 15:16]); % pay careful attention to this.
-  name=[outpth '3B42V7' ds '.asc'];
+  tfn=fullfile(wkpth,sprintf('3B42gc%s.tif',ds));
+  matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-  fid=fopen(name,'w');
-  fprintf(fid,'%s\n%s\n%s\n%s\n%s\n%s\n',['ncols ' num2str(nc)],['nrows '...
-    num2str(nr)],['xllcorner ' num2str(xll,8)],['yllcorner ' num2str(yll,8)],...
-    ['cellsize ' num2str(res_lat)],['NODATA_value ' num2str(ndv)]);
-  fclose(fid);
-  dlmwrite(name,p,'delimiter',' ','-append'); % output .asc
-
-% Project to a new coordinate
   fun='gdalwarp -overwrite -of GTiff -r bilinear '; % GDAL function
-  pr1='-s_srs wgs84 '; % Projection of original record
-  pr2=['-t_srs ' out_pj ' '];
-  pr3=[];
-  if ~isempty(rs)
-    pr3=sprintf('-tr %i %i ',rs(1),rs(2));
+  pr1=sprintf('-t_srs %s ',ors); % Project
+  if ~isempty(rs) % Resample
+    pr2=sprintf('-tr %i %i ',rs(1),rs(2));
   end
-  pr4=[];
+  pr3=[]; % Crop projected image
   if length(xl)==2
-    pr4=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
+    pr3=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
   end
 
-  par=[pr1 pr2 pr3 pr4];
-  inv=['"' name '" '];
-  ouv=['"' outpth '3B42V7p' ds '.tif"'];
-  system([fun par inv ouv]); % project
+  par=[pr1 pr2 pr3];
+  tfn1=fullfile(opth,sprintf('3B42gc%s.tif',ds));
+  system([fun par tfn ' ' tfn1]); % resample/project/crop
+  delete(tfn);
 
-  delete(name);
-
-  p1=double(imread([outpth '3B42V7p' ds '.tif']));
-  p1(p1==ndv)=NaN;
-
-else
-  if ~isempty(outpth)
-% Creat the asc files
-    ds=nm(8:end-8);
-    name=[outpth '3B42V7' ds '.asc'];
-
-    fid=fopen(name,'w');
-    fprintf(fid,'%s\n%s\n%s\n%s\n%s\n%s\n',['ncols ' num2str(nc)],['nrows '...
-      num2str(nr)],['xllcorner ' num2str(xll,8)],['yllcorner ' num2str(yll,8)],...
-      ['cellsize ' num2str(res_lat)],['NODATA_value ' num2str(ndv)]);
-    fclose(fid);
-    dlmwrite(name,p,'delimiter',' ','-append');
-  end
+  p=double(imread(tfn1));
 end
 p(p==ndv)=NaN;
 end

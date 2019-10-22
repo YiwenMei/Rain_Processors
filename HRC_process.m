@@ -6,17 +6,18 @@
 % This function is used to process the near-real-time or post-real-time high
 %  resolution CMORPH satellite precipitation product (Joyce et al. 2004). Its
 %  main functionalities are
-%    1)unzip the CMORPH record (e.g. CMORPH_V1.0_RAW_8km-30min_2008070100.bz2);
-%    2)read the unzipped record; and
-%    3)crop the record based on an given lat/lon box.
+%   1)unzip the CMORPH record (e.g. CMORPH_V1.0_RAW_8km-30min_2008070100.bz2);
+%   2)read the unzipped record; and
+%   3)extract the record based on an given lat/lon box.
 %  Its optional functionalities are
-%   4a)resample the cropped record;
-%   4b)project the cropped record to another coordinate system;
-%   5b)crop the projected record;
-%    6)output the processed record as geotiff.
+%   4)resample the extracted record;
+%   5)project the extracted record to another coordinate system; and
+%   6)crop the projected record to a retangular box.
+%  If any of the optional functionality is evoked, the processed record will
+%  be outputted as geotif in the output directory.
 
 %% Input
-% fname: full name with path of the input high resolution CMORPH record (e.g.,
+% fname: full name of the input high resolution CMORPH record (e.g.,
 %        G:\CMORPH\HRC\200807\CMORPH_V1.0_RAW_8km-30min_2008070100.bz2;
 %        G:\CMORPH\CHRC\200807\CMORPH_V1.0_ADJ_8km-30min_2008070100.bz2;);
 %  cty : type of CMORPH record as character (HRC for the near-real-time version
@@ -31,15 +32,15 @@
 %        in the unit of the output coordinate system);
 %  yt  : similar to yb but for the north boundary;
 
-% opth: path to store the outputed .tif files;
+% opth: output directory to store the outputed .tif files;
 % ors : output coordinate system (e.g. EPSG:102009);
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
 % p: processed precipitation (the orientation follows the human reading convention);
 
-% HRCyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
-%  (it only appears if any of the optional functionalty is evoked).
+% HRCyyyymmddhh.tif/CHRCyyyymmddhh.tif: geotiff file stores the processed precipitation
+%  in opth (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
 % 1)The input files are unzipped from the original monthly ".tar" file;
@@ -53,23 +54,22 @@ function p=HRC_process(fname,cty,wkpth,xl,xr,yb,yt,varargin)
 narginchk(7,10);
 ips=inputParser;
 ips.FunctionName=mfilename;
-fprintf('%s received 7 required and %d optional inputs\n',mfilename,length(varargin));
 
-addRequired(ips,'fname',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'fname',1));
+addRequired(ips,'fname',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'fname'));
 expInS={'HRC','CHRC'};
 msg=cell2mat(cellfun(@(x) [x ', '],expInS,'UniformOutput',false));
 msg=sprintf('Expected InS to be one of the following %s\n',msg);
 addRequired(ips,'cty',@(x) assert(any(strcmp(x,expInS)),msg));
-addRequired(ips,'wkpth',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'wkpth',3));
+addRequired(ips,'wkpth',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'wkpth'));
 msg=sprintf('Size of xl, xr, yb, yt must be 1 or 2');
 addRequired(ips,'xl',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'xr',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
-addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth',8));
-addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors',9));
-addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs',10));
+addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
+addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
+addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
 
 parse(ips,fname,cty,wkpth,xl,xr,yb,yt,varargin{:});
 opth=ips.Results.opth;
@@ -100,6 +100,7 @@ p(p==ndv)=NaN;
 p=nanmean(p,3);
 p=rot90(p);
 p(isnan(p))=ndv;
+delete(uz_fn);
 
 %% Extracting the file
 % Index of interested domain
@@ -114,15 +115,13 @@ cl=find(xl(1)-Lon>=0,1,'last'); % left column
 cr=find(xr(1)-Lon<=0,1,'first')-1; % right column
 rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
-
-xll=(cl-1)*rs_lon; % longitude of lower left corner
-yll=60-rb*rs_lat; % latitude of lower left corner
-
 p=p(rt:rb,cl:cr); % extract
-delete(uz_fn);
 
 %% Resample/project/crop the file
 pr2=[];
+
+xll=(cl-1)*rs_lon; % longitude of lower left corner
+yll=60-rb*rs_lat; % latitude of lower left corner
 
 ds=cell2mat(regexp(nm,'_(\d{10})','tokens','once'));
 if ~isempty(opth)
