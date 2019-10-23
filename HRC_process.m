@@ -36,19 +36,22 @@
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
-% p: processed precipitation (the orientation follows the human reading convention);
+%  p : processed precipitation (the orientation follows the human reading convention);
 
-% onmyyyymmddhh.tif: geotiff file stores the processed precipitation
-%  in opth (it only appears if any of the optional functionalty is evoked).
+% ofn: name of the outputted file with the form of onmyyyymmddhh.tif stored under
+%       opth (if no file is outputted, ofn is []);
+
+% onmyyyymmddhh.tif - geotiff file stores the processed precipitation in opth
+%  (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
 % 1)The input files are unzipped from the original monthly ".tar" file;
 % 2)If any optional functionality is required, please make sure to have GDAL
 %   installed;
-% 3)The no-data value of HRC/CHRC are preseved in the .tif record; and
+% 3)The no-data value of HRC/CHRC are preseved in the .tif file; and
 % 4)Require matV2tif.m.
 
-function p=HRC_process(fname,wkpth,xl,xr,yb,yt,varargin)
+function [p,ofn]=HRC_process(fname,wkpth,xl,xr,yb,yt,varargin)
 %% Check the inputs
 narginchk(6,10);
 ips=inputParser;
@@ -62,8 +65,9 @@ addRequired(ips,'xr',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
-addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
-addOptional(ips,'onm',[],@(x) validateattributes(x,{'char'},{},mfilename,'onm'));
+addOptional(ips,'opth','',@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
+addOptional(ips,'onm','CMORPH',@(x) validateattributes(x,{'char'},{'nonempty'},...
+    mfilename,'onm'));
 addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
 addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
 
@@ -116,6 +120,7 @@ p=p(rt:rb,cl:cr); % extract
 
 %% Resample/project/crop the file
 pr2=[];
+ofn=[];
 
 xll=(cl-1)*rs_lon; % longitude of lower left corner
 yll=60-rb*rs_lat; % latitude of lower left corner
@@ -129,21 +134,24 @@ if ~isempty(opth)
   tfn=fullfile(wkpth,sprintf('%s%s.tif',onm,ds));
   matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-  fun='gdalwarp -overwrite -of GTiff -r bilinear'; % GDAL function
+  fun='gdalwarp -overwrite -of GTiff -r bilinear -q'; % GDAL function
   pr1=sprintf('-t_srs %s',ors); % Project
   if ~isempty(rs) % Resample
     pr2=sprintf('-tr %i %i',rs(1),rs(2));
   end
-  pr3=[]; % Crop projected image
-  if length(xl)==2
+  if length(xl)==2 && length(xr)==2 && length(yt)==2 && length(yb)==2
     pr3=sprintf('-te %i %i %i %i',xl(2),yb(2),xr(2),yt(2));
+  elseif length(xl)==1 && length(xr)==1 && length(yt)==1 && length(yb)==1
+    pr3=[]; % Crop projected image
+  else
+    error('sizes of xl, yb, xr, and yt must be the same and equal to 1 or 2.');
   end
 
-  tfn1=fullfile(opth,sprintf('%s%s.tif',onm,ds));
-  system(sprintf('%s %s %s %s "%s" "%s"',fun,pr1,pr2,pr3,tfn,tfn1));
+  ofn=fullfile(opth,sprintf('%s%s.tif',onm,ds));
+  system(sprintf('%s %s %s %s "%s" "%s"',fun,pr1,pr2,pr3,tfn,ofn));
   delete(tfn);
 
-  p=double(imread(tfn1));
+  p=double(imread(ofn));
 end
 p(p==ndv)=NaN;
 end

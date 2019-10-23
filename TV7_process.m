@@ -34,7 +34,10 @@
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
-% p: processed precipitation (the orientation follows the human reading convention);
+%  p : processed precipitation (the orientation follows the human reading convention);
+
+% ofn: name of the outputted file with the form of onmyyyymmddhh.tif stored under
+%       opth (if no file is outputted, ofn is []);
 
 % onmyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
 %  (it only appears if any of the optional functionalty is evoked).
@@ -44,7 +47,7 @@
 %   installed;
 % 2)No-data value of TMPA 3B42V7 are changed (from -9.9999...e3) to -999 in the
 %   outputted .tif file;
-% 4)Require matV2tif.m.
+% 3)Require matV2tif.m.
 
 function [p,ofn]=TV7_process(fname,wkpth,xl,xr,yb,yt,varargin)
 %% Check the inputs
@@ -113,14 +116,17 @@ if ~isempty(opth)
   tfn=fullfile(wkpth,sprintf('%s%s.tif',onm,ds));
   matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-  fun='gdalwarp -overwrite -of GTiff -r bilinear'; % GDAL function
+  fun='gdalwarp -overwrite -of GTiff -r bilinear -q'; % GDAL function
   pr1=sprintf('-t_srs %s',ors); % Project
   if ~isempty(rs) % Resample
     pr2=sprintf('-tr %i %i',rs(1),rs(2));
   end
-  pr3=[]; % Crop projected image
-  if length(xl)==2
+  if length(xl)==2 && length(xr)==2 && length(yt)==2 && length(yb)==2
     pr3=sprintf('-te %i %i %i %i',xl(2),yb(2),xr(2),yt(2));
+  elseif length(xl)==1 && length(xr)==1 && length(yt)==1 && length(yb)==1
+    pr3=[]; % Crop projected image
+  else
+    error('sizes of xl, yb, xr, and yt must be the same and equal to 1 or 2.');
   end
 
   ofn=fullfile(opth,sprintf('%s%s.tif',onm,ds));
