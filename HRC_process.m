@@ -20,8 +20,6 @@
 % fname: full name of the input high resolution CMORPH record (e.g.,
 %        G:\CMORPH\HRC\200807\CMORPH_V1.0_RAW_8km-30min_2008070100.bz2;
 %        G:\CMORPH\CHRC\200807\CMORPH_V1.0_ADJ_8km-30min_2008070100.bz2;);
-%  cty : type of CMORPH record as character (HRC for the near-real-time version
-%        and CHRC for the post-real-time one);
 % wkpth: working directory of the code;
 %  xl  : longitude (in the range of [-180 180]) of the west boundary (xl can
 %        have an optional second element to represent the west boundary coordinate
@@ -33,13 +31,14 @@
 %  yt  : similar to yb but for the north boundary;
 
 % opth: output directory to store the outputed .tif files;
+% onm : a user-assigned name for the outputted CMORPH files as character;
 % ors : output coordinate system (e.g. EPSG:102009);
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
 % p: processed precipitation (the orientation follows the human reading convention);
 
-% HRCyyyymmddhh.tif/CHRCyyyymmddhh.tif: geotiff file stores the processed precipitation
+% onmyyyymmddhh.tif: geotiff file stores the processed precipitation
 %  in opth (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
@@ -49,17 +48,13 @@
 % 3)The no-data value of HRC/CHRC are preseved in the .tif record; and
 % 4)Require matV2tif.m.
 
-function p=HRC_process(fname,cty,wkpth,xl,xr,yb,yt,varargin)
+function p=HRC_process(fname,wkpth,xl,xr,yb,yt,varargin)
 %% Check the inputs
-narginchk(7,10);
+narginchk(6,10);
 ips=inputParser;
 ips.FunctionName=mfilename;
 
 addRequired(ips,'fname',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'fname'));
-expInS={'HRC','CHRC'};
-msg=cell2mat(cellfun(@(x) [x ', '],expInS,'UniformOutput',false));
-msg=sprintf('Expected InS to be one of the following %s\n',msg);
-addRequired(ips,'cty',@(x) assert(any(strcmp(x,expInS)),msg));
 addRequired(ips,'wkpth',@(x) validateattributes(x,{'char'},{'nonempty'},mfilename,'wkpth'));
 msg=sprintf('Size of xl, xr, yb, yt must be 1 or 2');
 addRequired(ips,'xl',@(x) assert(~isempty(x) & length(x)<3,msg));
@@ -68,11 +63,13 @@ addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
 addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
+addOptional(ips,'onm',[],@(x) validateattributes(x,{'char'},{},mfilename,'onm'));
 addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
 addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
 
-parse(ips,fname,cty,wkpth,xl,xr,yb,yt,varargin{:});
+parse(ips,fname,wkpth,xl,xr,yb,yt,varargin{:});
 opth=ips.Results.opth;
+onm=ips.Results.onm;
 ors=ips.Results.ors;
 rs=ips.Results.rs;
 clear ips msg varargin
@@ -86,12 +83,12 @@ Lat=60:-rs_lat:-60;
 ndv=-999; % no-data value of CMORPH
 
 %% unzip and read the file
-[inp,nm,~]=fileparts(fname);
-uz_fn=fullfile(wkpth,nm);
-system(sprintf('bunzip2 "%s"',fname)); % system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
+[~,nm,~]=fileparts(fname);
+ufn=fullfile(wkpth,nm);
+system(sprintf('bunzip2 -c "%s" > "%s"',fname,ufn));
+% system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
 
-movefile(fullfile(inp,nm),uz_fn); % This needs to work with bunzip2
-fid=fopen(uz_fn);
+fid=fopen(ufn);
 p=fread(fid,'float32','l');
 fclose(fid);
 
@@ -100,7 +97,7 @@ p(p==ndv)=NaN;
 p=nanmean(p,3);
 p=rot90(p);
 p(isnan(p))=ndv;
-delete(uz_fn);
+delete(ufn);
 
 %% Extracting the file
 % Index of interested domain
@@ -129,22 +126,21 @@ if ~isempty(opth)
     error('GDAL is not detected. Please install GDAL to evoke the optional functionalities.\n');
   end
 
-  tfn=fullfile(wkpth,sprintf('%s%s.tif',cty,ds));
+  tfn=fullfile(wkpth,sprintf('%s%s.tif',onm,ds));
   matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-  fun='gdalwarp -overwrite -of GTiff -r bilinear '; % GDAL function
-  pr1=sprintf('-t_srs %s ',ors); % Project
+  fun='gdalwarp -overwrite -of GTiff -r bilinear'; % GDAL function
+  pr1=sprintf('-t_srs %s',ors); % Project
   if ~isempty(rs) % Resample
-    pr2=sprintf('-tr %i %i ',rs(1),rs(2));
+    pr2=sprintf('-tr %i %i',rs(1),rs(2));
   end
   pr3=[]; % Crop projected image
   if length(xl)==2
-    pr3=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
+    pr3=sprintf('-te %i %i %i %i',xl(2),yb(2),xr(2),yt(2));
   end
 
-  par=[pr1 pr2 pr3];
-  tfn1=fullfile(opth,sprintf('%s%s.tif',cty,ds));
-  system([fun par tfn ' ' tfn1]); % resample/project/crop
+  tfn1=fullfile(opth,sprintf('%s%s.tif',onm,ds));
+  system(sprintf('%s %s %s %s "%s" "%s"',fun,pr1,pr2,pr3,tfn,tfn1));
   delete(tfn);
 
   p=double(imread(tfn1));

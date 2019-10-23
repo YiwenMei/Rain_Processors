@@ -29,13 +29,14 @@
 %  yt  : similar to yb but for the north boundary;
 
 % opth: output directory to store the outputed .tif files;
+% onm : a user-assigned name for the outputted 3B42 files as character;
 % ors : output coordinate system (e.g. EPSG:102009);
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
 % p: processed precipitation (the orientation follows the human reading convention);
 
-% 3B42gcyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
+% onmyyyymmddhh.tif: geotiff file stores the processed precipitation in opth
 %  (it only appears if any of the optional functionalty is evoked).
 
 %% Additional note
@@ -45,9 +46,9 @@
 %   outputted .tif file;
 % 4)Require matV2tif.m.
 
-function p=TV7_process(fname,wkpth,xl,xr,yb,yt,varargin)
+function [p,ofn]=TV7_process(fname,wkpth,xl,xr,yb,yt,varargin)
 %% Check the inputs
-narginchk(6,9);
+narginchk(6,10);
 ips=inputParser;
 ips.FunctionName=mfilename;
 
@@ -60,6 +61,7 @@ addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
 addOptional(ips,'opth',[],@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
+addOptional(ips,'onm',[],@(x) validateattributes(x,{'char'},{},mfilename,'onm'));
 addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
 addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
 
@@ -79,9 +81,9 @@ ndv=-999; % no-data value
 
 %% unzip and read the input
 [~,nm,~]=fileparts(fname);
-ufn=fullfile(wkpth,nm); % system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
+ufn=fullfile(wkpth,nm);
 system(sprintf('gunzip -c %s > %s',fname,ufn));
-% delete(fname);
+% system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
 
 p=double(hdfread(ufn,'precipitation'));
 p=rot90(p); % Original upper-left corner is (S,W). Rotate 90 degree counter
@@ -97,6 +99,7 @@ p=p(rt:rb,cl:cr); % extract
 
 %% Resample/project/crop the file
 pr2=[];
+ofn=[];
 
 xll=-180+(cl-1)*rs_lon; % longitude of lower left corner
 yll=50-rb*rs_lat; % latitude of lower left corner
@@ -107,25 +110,24 @@ if ~isempty(opth)
     error('GDAL is not detected. Please install GDAL to evoke the optional functionalities.\n');
   end
 
-  tfn=fullfile(wkpth,sprintf('3B42gc%s.tif',ds));
+  tfn=fullfile(wkpth,sprintf('%s%s.tif',onm,ds));
   matV2tif(tfn,p,xll,yll,rs_lat,ndv,'wgs84',wkpth);
 
-  fun='gdalwarp -overwrite -of GTiff -r bilinear '; % GDAL function
-  pr1=sprintf('-t_srs %s ',ors); % Project
+  fun='gdalwarp -overwrite -of GTiff -r bilinear'; % GDAL function
+  pr1=sprintf('-t_srs %s',ors); % Project
   if ~isempty(rs) % Resample
-    pr2=sprintf('-tr %i %i ',rs(1),rs(2));
+    pr2=sprintf('-tr %i %i',rs(1),rs(2));
   end
   pr3=[]; % Crop projected image
   if length(xl)==2
-    pr3=sprintf('-te %i %i %i %i ',xl(2),yb(2),xr(2),yt(2));
+    pr3=sprintf('-te %i %i %i %i',xl(2),yb(2),xr(2),yt(2));
   end
 
-  par=[pr1 pr2 pr3];
-  tfn1=fullfile(opth,sprintf('3B42gc%s.tif',ds));
-  system([fun par tfn ' ' tfn1]); % resample/project/crop
+  ofn=fullfile(opth,sprintf('%s%s.tif',onm,ds));
+  system(sprintf('%s %s %s %s "%s" "%s"',fun,pr1,pr2,pr3,tfn,ofn));
   delete(tfn);
 
-  p=double(imread(tfn1));
+  p=double(imread(ofn));
 end
 p(p==ndv)=NaN;
 end
