@@ -1,6 +1,6 @@
 % Yiwen Mei (ymei2@gmu.edu)
 % CEIE, George Mason University
-% Last update: 3/2/2018
+% Last update: 10/22/2018
 
 %% Functionality
 % This function is used to process the TMPA 3B42-V7 satellite precipitation product
