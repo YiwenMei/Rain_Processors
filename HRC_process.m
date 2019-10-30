@@ -36,7 +36,10 @@
 %  rs : x and y resolution of the outputted precipitation.
 
 %% Output
-%  p : processed precipitation (the orientation follows the human reading convention);
+%  P : processed precipitation with lat/lon grids (if any of the optional functionalities
+%       was evoked, the lat/lon grids are implicitly included in the outputted
+%       .tif files and are not included in P; the orientation of P follows the
+%       human reading convention);
 
 % ofn: name of the outputted file with the form of onmyyyymmddhh.tif stored under
 %       opth (if no file is outputted, ofn is []);
@@ -51,7 +54,7 @@
 % 3)The no-data value of HRC/CHRC are preseved in the .tif file; and
 % 4)Require matV2tif.m.
 
-function [p,ofn]=HRC_process(fname,wkpth,xl,xr,yb,yt,varargin)
+function [P,ofn]=HRC_process(fname,wkpth,xl,xr,yb,yt,varargin)
 %% Check the inputs
 narginchk(6,10);
 ips=inputParser;
@@ -66,7 +69,7 @@ addRequired(ips,'yb',@(x) assert(~isempty(x) & length(x)<3,msg));
 addRequired(ips,'yt',@(x) assert(~isempty(x) & length(x)<3,msg));
 
 addOptional(ips,'opth','',@(x) validateattributes(x,{'char'},{},mfilename,'opth'));
-addOptional(ips,'onm','CMORPH',@(x) validateattributes(x,{'char'},{'nonempty'},...
+addOptional(ips,'onm','CMORPH-',@(x) validateattributes(x,{'char'},{'nonempty'},...
     mfilename,'onm'));
 addOptional(ips,'ors','wgs84',@(x) validateattributes(x,{'char'},{},mfilename,'ors'));
 addOptional(ips,'rs',[],@(x) validateattributes(x,{'double'},{},mfilename,'rs'));
@@ -117,6 +120,10 @@ cr=find(xr(1)-Lon<=0,1,'first')-1; % right column
 rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
 p=p(rt:rb,cl:cr); % extract
+lon=Lon(cl:cr);
+lat=Lat(rt:-1:rb)';
+P.lat=lat;
+P.lon=lon;
 
 %% Resample/project/crop the file
 pr2=[];
@@ -151,7 +158,8 @@ if ~isempty(opth)
   system(sprintf('%s %s %s %s "%s" "%s"',fun,pr1,pr2,pr3,tfn,ofn));
   delete(tfn);
 
-  p=double(imread(ofn));
+  P=double(imread(ofn));
 end
 p(p==ndv)=NaN;
+P.p=p;
 end

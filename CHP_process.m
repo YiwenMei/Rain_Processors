@@ -39,12 +39,13 @@
 % Ofn: name list of the output .mat or .tif files stores in opth;
 
 % onmyyyymmddhh.mat / onmyyyymmddhh.tif - .mat or .tif files of the processed
-%  precipitation in opth.
+%  precipitation in opth;
+% Gridyyyy.mat - the lat/lon grids of the .mat file.
 
 %% Additional note
 % 1)If any optional functionality is required, please make sure to have GDAL
 %   installed;
-% 2)The no-data value of HRC/CHRC are preseved in the .tif files; and
+% 2)The no-data value of CHIRP/CHIRPS are preseved in the .tif files; and
 % 3)Require matV2tif.m and doy2date.m.
 
 function Ofn=CHP_process(fname,wkpth,opth,onm,xl,xr,yb,yt,varargin)
@@ -102,6 +103,10 @@ cr=find(xr(1)-Lon<=0,1,'first')-1; % right column
 rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
 
+Grid.lat=Lat(rt:-1:rb)';
+Grid.lon=Lon(cl:cr);
+save(fullfile(opth,['Grid' ys '.mat']),'Grid');
+
 xll=(cl-1)*rs_lon; % longitude of lower left corner
 yll=50-rb*rs_lat; % latitude of lower left corner
 
@@ -153,6 +158,7 @@ if ~contains(pr1,'wgs84') || ~isempty(pr2) || ~isempty(pr3)
   if system('gdalinfo --version')~=0
     error('GDAL is not detected. Please install GDAL to evoke the optional functionalities.\n');
   end
+  delete(fullfile(opth,['Grid' ys '.mat'])); % Delete the Grid<ys>.mat
 
   tfn=fullfile(wkpth,[nm '.tif']);
   p(isnan(p))=ndv;
