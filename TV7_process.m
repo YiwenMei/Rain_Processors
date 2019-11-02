@@ -84,13 +84,13 @@ rs_lon=360/1440;
 rs_lat=100/400;
 Lon=-180:rs_lon:180;
 Lat=50:-rs_lat:-50;
-
 ndv=-999; % no-data value
 
 %% unzip and read the input
 [~,nm,~]=fileparts(fname);
-ufn=fullfile(wkpth,nm);
-system(sprintf('gunzip -c %s > %s',fname,ufn));
+ufn=cell2mat(gunzip(fname,wkpth));
+% ufn=fullfile(wkpth,nm);
+% system(sprintf('gunzip -c %s > %s',fname,ufn));
 % system(sprintf('7z e "%s" -o"%s" * -r',fname,wkpth));
 
 p=double(hdfread(ufn,'precipitation'));
