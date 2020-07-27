@@ -105,7 +105,7 @@ rt=find(yt(1)-Lat<=0,1,'last'); % top row
 rb=find(yb(1)-Lat>=0,1,'first')-1; % bottom row
 p=p(rt:rb,cl:cr); % extract
 lon=Lon(cl:cr);
-lat=Lat(rt:-1:rb)';
+lat=Lat(rt:rb)';
 P.lat=lat;
 P.lon=lon;
 
